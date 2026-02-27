@@ -1,0 +1,55 @@
+---
+title: "Appendix — Manuscript Title"
+date: today
+date-format: "YYYY-MM-DD"
+format:
+  docx:
+    toc: true
+    number-sections: true
+bibliography: references.bib
+csl: ecology.csl
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+```{r setup}
+library(tidyverse)
+library(here)
+```
+
+# Appendix A — Supplementary Methods
+
+*Additional methodological details that support the main text but would interrupt its flow.*
+
+## A1 — Simulation Parameter Details
+```{r param-table}
+# Display full parameter grid
+# params <- read_csv(here("outputs", "simulation_results", "param_grid.csv"))
+# knitr::kable(params, caption = "Full simulation parameter grid.")
+```
+
+## A2 — Model Equations
+
+*Mathematical details, derivations, or extended model description.*
+
+---
+
+# Appendix B — Supplementary Results
+
+## B1 — Sensitivity Analyses
+```{r fig-sensitivity}
+#| label: fig-s1
+#| fig-cap: "Supplementary Figure S1. Caption here."
+
+# knitr::include_graphics(here("figures", "figS1_sensitivity.png"))
+```
+
+## B2 — Additional Figures and Tables
+
+---
+
+# References
+
+::: {#refs}
+:::

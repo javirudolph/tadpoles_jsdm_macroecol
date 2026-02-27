@@ -1,0 +1,30 @@
+# Raw data - privacy and sharing
+data/raw/
+!data/raw/README.md
+
+# Heavy R objects
+*.RData
+*.rds
+
+# Reproducible outputs
+*.html
+*.png
+
+# R defaults
+.Rhistory
+.Ruserdata
+.Rproj.user/
+
+# macOS
+.DS_Store
+
+# Geospatial
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.geojson
+*.gpkg
+*.tif
+*.tiff

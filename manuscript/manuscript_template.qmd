@@ -1,0 +1,154 @@
+---
+title: "Manuscript Title"
+authors:
+  - name: Person1
+    affiliations:
+      - ref: ufl
+    corresponding: true
+    email: person1@email.edu
+  - name: Second Author
+    affiliations:
+      - ref: ufl
+      - ref: aff2
+  - name: Third Author
+    affiliations:
+      - ref: aff2
+affiliations:
+  - id: ufl
+    name: University of Florida
+    department: Department of Name
+    city: Gainesville
+    state: FL
+  - id: aff2
+    name: Second Institution
+    department: Department of Name
+    city: City
+    state: ST
+date: today
+date-format: "YYYY-MM-DD"
+format:
+  docx:
+    # reference-doc: custom-reference.docx   # optional: use a Word template for journal formatting
+    toc: false
+    number-sections: false
+bibliography: references.bib
+csl: ecology.csl    # download from https://www.zotero.org/styles
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+```{r setup}
+# load any required packages here
+# although shouldn't be many since all analysis and figures should be done already
+```
+
+# Abstract
+
+*250-300 words. Background, methods, key results, conclusions.*
+
+**Keywords:** keyword1, keyword2, keyword3
+
+---
+
+# Introduction
+
+*Background and motivation. What is the problem and why does it matter? What gap does this study fill?*
+
+*End with a clear statement of your objectives or research questions.*
+
+# Introduction
+
+Understanding ecological dynamics requires careful attention to how complexity
+emerges from simple rules [@May1976]. This analysis was conducted using a
+reproducible workflow built on the simulation study project template
+[@Rudolph2026simtemplate]. You can find more information on citations
+[here](https://quarto.org/docs/authoring/citations.html).
+
+---
+
+# Methods
+
+## Simulation Design
+
+*Describe your simulation framework. What parameters did you vary? What was held constant? How many replicates?*
+
+*Reference your simulation scripts:* `R/simulations/`
+```{r simulation-params}
+# Load and display simulation parameter table if useful
+# params <- read_csv(here("outputs", "simulation_results", "param_grid.csv"))
+```
+
+## Statistical Analysis
+
+*How did you summarize and analyze simulation outputs?*
+
+---
+
+# Results
+
+*Present results in a logical order matching your methods. Reference figures and tables by label.*
+```{r load-results}
+# Load summarized simulation outputs
+# results <- read_csv(here("outputs", "simulation_results", "summary.csv"))
+```
+
+## Section 1
+
+*Text referencing* @fig-example *and inline results like* `r 2 + 2`.
+```{r fig-example}
+#| label: fig-example
+#| fig-cap: "Caption describing what this figure shows."
+#| fig-width: 6.5
+#| fig-height: 4
+
+# Either build figure inline or load from figures/
+# knitr::include_graphics(here("figures", "fig01_example.png"))
+```
+
+## Section 2
+
+---
+
+# Discussion
+
+*Interpret your results in the context of the literature. What do your simulations tell us that empirical data alone cannot?*
+
+## Main finding 1
+
+## Main finding 2
+
+## Limitations
+
+*Be honest about assumptions baked into your simulations and what they mean for generalizability.*
+
+---
+
+# Conclusions
+
+
+
+---
+
+# Acknowledgements
+
+*Funding, data providers, HPC resources (e.g., UF Research Computing), field or lab support, this template*
+
+---
+
+# Author Contributions
+
+*CRediT taxonomy recommended: Conceptualization, Methodology, Software, Validation, Formal Analysis, Investigation, Data Curation, Writing – Original Draft, Writing – Review & Editing, Visualization, Supervision, Funding Acquisition.*
+
+---
+
+# Data Availability
+
+*Where can data be accessed? If restricted, explain why and how to request access.*
+
+---
+
+# References
+
+::: {#refs}
+:::
