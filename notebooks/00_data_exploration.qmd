@@ -39,6 +39,7 @@ library(tidyverse)
 library(readxl)
 library(janitor)
 library(skimr)
+library(phyloseq)
 ```
 
 ---
@@ -85,7 +86,7 @@ asv_prevalence <- colSums(otu_mat > 0)
 summary(asv_prevalence)
 ```
 
-The ASV prevalence summary shows the extreme sparsity that is typical of microbiome count data. Of the 23,051 ASVs detected, the median prevalence is 1, meaning more than half of all ASVs appear in only a single sample. The mean prevalence of about 3 samples per ASV and a maximum of 93 confirm that while a small number of ASVs are broadly distributed, the vast majority are rare and pond-specific. This is consistent with Correa et al. (2020), who found that most bacteria occur in only a single pond. Read depth per sample ranges from 1,647 to 91,241 (median ~15,800), which is reasonable coverage but with enough unevenness across samples that rarefaction will matter later. Because so many ASVs appear in only one sample and can't be distinguished from sequencing noise, we apply a minimum prevalence filter before moving on, which brings the dataset down to a more manageable size while keeping the ecologically relevant signal.
+The ASV prevalence summary shows the extreme sparsity that is typical of microbiome count data. Of the 23,051 ASVs detected, the median prevalence is 1, meaning more than half of all ASVs appear in only a single sample. The mean prevalence of about 3 samples per ASV and a maximum of 93 confirm that while a small number of ASVs are broadly distributed, the vast majority are rare and pond-specific. This is consistent with Correa et al. (2020), who found that most bacteria occur in only a single pond. Because so many ASVs appear in only one sample and can't be distinguished from sequencing noise, we apply a minimum prevalence filter before moving on, which brings the dataset down to a more manageable size while keeping the ecologically relevant signal.
 
 ```{r}
 # How many ASVs appear in only 1 sample?
@@ -110,10 +111,20 @@ used in the original study).
 ```{r}
 #| label: load-tax
 
-tax_raw <- read_csv("data/raw/tax_table.csv")
+tax_raw <- read_csv("../data/raw/tax_table.csv")
 
 glimpse(tax_raw)
 ```
+
+```{r}
+tax_raw |> count(Kingdom)
+
+tax_raw |> count(Phylum, sort = TRUE)
+
+tax_raw |> 
+  summarise(across(Kingdom:Genus, ~sum(is.na(.)) / n() * 100))
+```
+
 
 ### Sample data
 
@@ -148,17 +159,34 @@ sample_meta |>
 
 ### EBB metadata
 
+The Brazil metadata contains 93 samples across 6 ponds (Brejo, Castelo, Pedreira, R2, R3, and Bomba), with 81 tadpole gut samples and 6 water and sediment samples each, consistent with Correa et al. (2020). Tadpole rows include full taxonomic information at the family, genus, and species level, with Genus_Species being the most convenient identifier for downstream analysis. Coordinates are available for all samples, which will be useful for the dispersal limitation analysis. Environmental sample rows use pond name as a placeholder in the species columns rather than leaving them empty.
+
 ```{r}
 #| label: load-ebb
 
-ebb_meta <- read_csv("data/raw/ebb_metadata.csv")
+ebb_meta <- read_csv("../data/raw/ebb_metadata.csv")
 
 glimpse(ebb_meta)
 ```
 
+
+```{r}
+# See the tadpole rows where species info is actually populated
+ebb_meta |> 
+  filter(!Type %in% c("Substrate", "Water")) |> 
+  select(SampleName, Site, family, frog_Genus, frog_Species, Genus_Species)
+
+# How many sample types?
+ebb_meta |> count(Type)
+
+# All 6 Brazil ponds present?
+ebb_meta |> distinct(Site)
+```
+
+
 ### Ecolab metadata
 
-The Ecolab metadata clarifies the apparent pond count discrepancy. Of the 13 ponds in the dataset, only 7 contained tadpoles (hastads == "y"), matching exactly the 7 Central Texas ponds reported in Correa et al. (2020). The remaining 6 ponds were sampled for water and sediment only and were not included in the published analysis. Four additional rows with missing pond information correspond to blank and failed samples that will be excluded going forward. The Ecolab metadata also contains additional covariates including tadpole size, source/sink classification, and coordinates for a subset of samples, which may be useful in extended analyses.
+The Ecolab metadata clarifies the apparent pond count discrepancy. Of the 13 ponds in the dataset, only 7 contained tadpoles (hastads == "y"), matching exactly the 7 Central Texas ponds reported in Correa et al. (2020). The remaining 6 ponds were sampled for water and sediment only and were not included in the published analysis. Four additional rows with missing pond information correspond to blank and failed samples that will be excluded going forward. The Ecolab metadata also contains additional covariates including tadpole size, source/sink classification, and coordinates for a subset of samples, which may be useful.
 
 ```{r}
 #| label: load-ecolab
@@ -187,11 +215,39 @@ Data from David Crockett and Angelina National Forests (East Texas, ET site).
 ```{r}
 #| label: load-dcnf
 
-dcnf_meta <- read_xlsx("data/raw/DCNF_metadata.xlsx") |> 
+dcnf_meta <- read_xlsx("../data/raw/DCNF_metadata.xlsx") |> 
   clean_names()
 
 glimpse(dcnf_meta)
 ```
+
+```{r}
+# Fix numeric columns
+dcnf_meta <- dcnf_meta |> 
+  mutate(across(c(latitute, longitude, watertemp, conductivity, 
+                  chlorophyll, do, p_h, gosner_stage), as.numeric))
+
+# Check sample types
+dcnf_meta |> count(type_of_sample)
+
+# Check ponds
+dcnf_meta |> distinct(pond)
+
+# Explain the 132 vs 95 discrepancy
+dcnf_meta |> 
+  count(sample_name %in% sample_meta$SampleName)
+```
+
+```{r}
+# Compare a few names directly
+head(dcnf_meta$sample_name)
+head(sample_meta |> filter(Site == "DCNF") |> pull(SampleName))
+
+# Try case-insensitive match
+dcnf_meta |> 
+  count(toupper(sample_name) %in% toupper(sample_meta$SampleName))
+```
+
 
 ---
 
@@ -205,87 +261,79 @@ glimpse(dcnf_meta)
 skim(sample_meta)
 ```
 
-How many samples per locality and sample type?
+How many samples per site and sample type?
 
 ```{r}
 #| label: sample-counts
 
 sample_meta |> 
-  count(locality, sample_type) |> 
-  pivot_wider(names_from = sample_type, values_from = n, values_fill = 0)
+  count(Site, SampleType)
 ```
 
-How many tadpole species per locality?
+How many tadpole species per pond?
 
 ```{r}
-#| label: species-per-locality
 
 sample_meta |> 
-  filter(sample_type == "tadpole") |>   # adjust column name/value as needed
-  distinct(locality, tadpole_species) |> # adjust column names as needed
-  count(locality, name = "n_species")
+  filter(SampleType == "tadpole") |>
+  count(Pond, Site, Species)
 ```
 
-How many water bodies (ponds) per locality?
+How many water bodies (ponds) per site?
 
 ```{r}
-#| label: ponds-per-locality
 
 sample_meta |> 
-  distinct(locality, pond_id) |>   # adjust column name as needed
-  count(locality, name = "n_ponds")
+  count(Pond, Site)
 ```
 
 ### OTU table dimensions
 
 ```{r}
 #| label: otu-dims
-
-cat("OTU table dimensions:", nrow(otu_raw), "x", ncol(otu_raw), "\n")
+cat("OTU table dimensions (raw):     243 x 23051\n")
+cat("OTU table dimensions (filtered):", nrow(otu_mat_filt), "x", ncol(otu_mat_filt), "\n")
 ```
 
 ### Taxonomy table summary
-
-How many ASVs assigned to each phylum?
-
 ```{r}
 #| label: tax-phylum-counts
 
-tax_raw |> 
-  count(Phylum, sort = TRUE)   # adjust column name casing as needed
+tax_raw |> count(Phylum, sort = TRUE)
 ```
 
----
-
 ## Build phyloseq object
-
 ```{r}
 #| label: build-phyloseq
 
-# --- OTU matrix ---
-# Assumes first column is sample/ASV ID — adjust as needed
-otu_mat <- otu_raw |> 
-  column_to_rownames(var = names(otu_raw)[1]) |> 
-  as.matrix()
+# --- OTU matrix (use filtered) ---
+# rows = samples, columns = ASVs
+otu_mat_ps <- otu_mat_filt
 
 # --- Taxonomy matrix ---
-tax_mat <- tax_raw |> 
-  column_to_rownames(var = names(tax_raw)[1]) |> 
+tax_mat <- tax_raw |>
+  column_to_rownames(var = "SV") |>
   as.matrix()
 
+# Keep only ASVs present in filtered OTU matrix
+tax_mat <- tax_mat[colnames(otu_mat_ps), ]
+
 # --- Sample data frame ---
-samp_df <- sample_meta |> 
-  column_to_rownames(var = names(sample_meta)[1])
+samp_df <- sample_meta |>
+  column_to_rownames(var = "SampleName")
 
 # --- Assemble phyloseq object ---
 ps <- phyloseq(
-  otu_table(otu_mat, taxa_are_rows = FALSE),  # flip to TRUE if ASVs are rows
+  otu_table(otu_mat_ps, taxa_are_rows = FALSE),
   tax_table(tax_mat),
   sample_data(samp_df)
 )
 
 ps
 ```
+
+
+
 
 ### Quick sanity checks
 
@@ -321,30 +369,6 @@ tibble(
 
 ---
 
-## Initial questions
-
-Based on the Correa et al. framework, the analyses will ultimately address:
-
-1. **Pond vs. species effect**: Is the gut microbiome more structured by pond of 
-   origin (regional species pool) or by host tadpole species (local filter)?  
-   → perMANOVA with CODA/PHILR-transformed data; variance partitioning
-
-2. **Alpha diversity**: How does bacterial richness and phylogenetic diversity 
-   (Faith's PD) vary across localities, ponds, and tadpole species?  
-   → Requires rarefaction; compare tadpole gut vs. water vs. sediment
-
-3. **Beta diversity**: Do tadpole gut microbiomes cluster more by pond or by species 
-   in ordination space?  
-   → PCA on CLR-transformed data; Bray-Curtis on rarefied counts
-
-4. **Inter-pond variation**: Is there evidence for dispersal limitation in the 
-   environmental (water/sediment) bacteria?  
-   → MRM with geographic distance matrix
-
-5. **Metanetwork structure**: Are ponds distinct bacterial species pools?  
-   → Modularity analysis; proportion of ASVs unique to each pond
-
----
 
 ## Session info
 
