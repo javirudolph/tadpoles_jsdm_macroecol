@@ -226,10 +226,132 @@ dcnf_reads <- dcnf_otu_filt[dcnf_otu_filt > 0]
 
 summary(dcnf_reads)
 
-hist(log1p(dcnf_reads), breaks = 50,
+hist(log1p(dcnf_reads), breaks = 100,
      main = "Distribution of log1p(reads) — DCNF non-zero counts",
      xlab = "log1p(reads)")
 ```
+
+# Test fits
+
+```{r}
+# we filter to match the 95 samples we have that correspond to the ASVs data
+dcnf_df <- dcnf_meta |>
+  filter(!is.na(pond) & pond != "NA") |>
+  filter(toupper(gsub("-", "", sample_name)) %in% 
+           toupper(gsub("-", "", rownames(dcnf_otu_filt)))) |>
+  arrange(match(toupper(gsub("-", "", sample_name)),
+                toupper(gsub("-", "", rownames(dcnf_otu_filt)))))
+
+# AND we add another classifier
+dcnf_df <- dcnf_df |>
+  mutate(
+    is_tadpole  = family %in% c("Ranidae", "Hylidae", "Microhylidae"),
+    is_salamander = family %in% c("Sirenidae", "Ambystomatidae", "Salamandridae"),
+    is_env      = family %in% c("WATER", "SUBSTRATE")
+  )
+
+dcnf_df |> count(is_tadpole, is_salamander, is_env, family)
+```
+
+```{r}
+# Y matrix presence/absence only
+Y <- (dcnf_otu_filt > 0) * 1L
+
+# check alignment that rows match rows (sample names)
+all(toupper(gsub("-", "", rownames(dcnf_otu_filt))) == 
+    toupper(gsub("-", "", dcnf_df$sample_name)))
+```
+
+
+Try a test fit, for a simple model
+
+
+```{r}
+X <- dcnf_df |>
+  select(chlorophyll, conductivity, p_h) |>
+  mutate(across(everything(), scale)) |>
+  as.matrix()
+
+model_pa <- sjSDM(
+  Y        = Y,
+  env      = linear(data = X, formula = ~chlorophyll + conductivity + p_h),
+  biotic   = bioticStruct(df = 2L), #make it simpler because large data
+  family   = binomial("probit"),
+  sampling = 100L,
+  se       = FALSE,
+  device   = "cpu",
+  iter     = 100L
+)
+
+summary(model_pa)
+```
+This to me says, we need to think about functional groups and how do we classify these differently? It might change if we use abundance instead of presence/absence. 
+```{r}
+# 1. residual co-occurrence
+image(getCor(model_pa))
+```
+
+Thinking I really want to try the abundance model instead. 
+
+```{r}
+Y_counts <- dcnf_otu_filt
+
+model_ab <- sjSDM(
+  Y        = Y_counts,
+  env      = linear(data = X, formula = ~chlorophyll + conductivity + p_h),
+  biotic   = bioticStruct(df = 2L),
+  family   = poisson("log"),
+  sampling = 100L,
+  se       = FALSE,
+  device   = "cpu",
+  iter     = 100L
+)
+
+image(getCor(model_ab))
+```
+
+
+
+```{r}
+cor_mat <- getCor(model_pa)
+cor_vec <- cor_mat[upper.tri(cor_mat)]
+
+hist(cor_vec, breaks = 50,
+     main = "Residual ASV co-occurrence correlations",
+     xlab = "Correlation")
+
+cat("Strong positive (r >  0.3):", sum(cor_vec >  0.3), "\n")
+cat("Strong negative (r < -0.3):", sum(cor_vec < -0.3), "\n")
+```
+
+
+```{r}
+# top 50 most prevalent ASVs
+
+dimnames(cor_mat) <- list(colnames(dcnf_otu_filt), colnames(dcnf_otu_filt))
+
+top50 <- names(sort(colSums(dcnf_otu_filt > 0), decreasing = TRUE)[1:50])
+cor_top <- cor_mat[top50, top50]
+image(cor_top)
+```
+
+
+We need more exploration of smaller datasets here or something. 
+
+
+
+```{r}
+# 3. variation partitioning
+an <- anova(model_pa, verbose = FALSE)
+summary(an)
+plot(an)
+
+results <- internalStructure(an)
+plot(results)
+
+```
+
+
 
 
 
