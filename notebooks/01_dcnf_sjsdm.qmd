@@ -360,7 +360,7 @@ library(pheatmap)
 
 # annotation for rows/cols
 annot <- tax_top50 |>
-  select(SV, Order) |>
+  select(SV, Phylum) |>
   column_to_rownames("SV")
 
 pheatmap(cor_ordered,
@@ -368,8 +368,27 @@ pheatmap(cor_ordered,
          annotation_col = annot,
          show_rownames  = TRUE,
          show_colnames  = FALSE,
+         # cluster_rows   = FALSE,
+         # cluster_cols   = FALSE,
          main           = "Residual co-occurrence — top 50 ASVs ordered by taxonomy")
 ```
+
+
+This was cool, I want it for all of them then.
+
+```{r}
+png("../outputs/cooccurrence_full.png", width = 2000, height = 2000, res = 150)
+pheatmap(cor_ordered_full,
+         annotation_row = annot_full,
+         annotation_col = annot_full,
+         show_rownames  = FALSE,
+         show_colnames  = FALSE,
+         cluster_rows   = FALSE,
+         cluster_cols   = FALSE,
+         main           = "Residual co-occurrence — all 2408 ASVs ordered by taxonomy")
+dev.off()
+```
+
 
 
 ```{r}
