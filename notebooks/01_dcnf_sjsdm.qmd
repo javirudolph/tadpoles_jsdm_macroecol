@@ -330,14 +330,46 @@ cat("Strong negative (r < -0.3):", sum(cor_vec < -0.3), "\n")
 
 dimnames(cor_mat) <- list(colnames(dcnf_otu_filt), colnames(dcnf_otu_filt))
 
-top50 <- names(sort(colSums(dcnf_otu_filt > 0), decreasing = TRUE)[1:50])
+top50 <- names(sort(colSums(dcnf_otu_filt > 0), decreasing = TRUE)[1:20])
 cor_top <- cor_mat[top50, top50]
 image(cor_top)
 ```
 
 
 We need more exploration of smaller datasets here or something. 
+Next step: organize the taxa by family or something like that and visualize it like this. 
 
+
+The co-occurrence matrix has 2408 × 2408 entries and is uninterpretable as a raw image. To get something meaningful, we focus on the 50 most prevalent ASVs and order them by their phylogenetic grouping using the taxonomy table. If correlated blocks align with taxonomic groups, that suggests phylogenetically related bacteria tend to co-occur, or avoid each other, in consistent ways across tadpole guts.
+
+```{r}
+tax_raw <- read_csv("../data/raw/tax_table.csv")
+
+# get taxonomy for top 50 ASVs
+tax_top50 <- tax_raw |>
+  filter(SV %in% top50) |>
+  arrange(Phylum, Class, Order, Family, Genus)
+
+# reorder correlation matrix by phylogenetic order
+ordered_asvs <- tax_top50$SV
+cor_ordered  <- cor_mat[ordered_asvs, ordered_asvs]
+```
+
+```{r}
+library(pheatmap)
+
+# annotation for rows/cols
+annot <- tax_top50 |>
+  select(SV, Order) |>
+  column_to_rownames("SV")
+
+pheatmap(cor_ordered,
+         annotation_row = annot,
+         annotation_col = annot,
+         show_rownames  = TRUE,
+         show_colnames  = FALSE,
+         main           = "Residual co-occurrence — top 50 ASVs ordered by taxonomy")
+```
 
 
 ```{r}
