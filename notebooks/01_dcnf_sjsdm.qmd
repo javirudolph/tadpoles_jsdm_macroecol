@@ -217,4 +217,19 @@ dcnf_otu_filt <- dcnf_otu_raw[, dcnf_prev >= 2]
 dim(dcnf_otu_filt)
 ```
 
+# Model fitting checks
+
+Before building the response matrix, we inspect the distribution of read counts within the DCNF subset. Microbiome count data is typically extremely right-skewed, with a few highly abundant ASVs and many low-count detections. This informs our modelling choices: presence/absence (Bernoulli/probit) sidesteps compositionality and overdispersion entirely, while a count-based model (Poisson/Negative Binomial) uses the raw integers directly with a log link. We will run both and compare. The log1p-transformed histogram gives a clearer view of the count distribution than the raw values.
+
+```{r}
+dcnf_reads <- dcnf_otu_filt[dcnf_otu_filt > 0]
+
+summary(dcnf_reads)
+
+hist(log1p(dcnf_reads), breaks = 50,
+     main = "Distribution of log1p(reads) — DCNF non-zero counts",
+     xlab = "log1p(reads)")
+```
+
+
 
