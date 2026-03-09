@@ -64,6 +64,30 @@ gc()
 
 ```
 
+Since this one is heavy, we want to apply the filters we explored in the previous notebook:
+
+```{r}
+# Sparsity summary
+mean(otu_mat == 0)
+
+sample_reads <- rowSums(otu_mat)
+asv_prevalence <- colSums(otu_mat > 0)
+
+summary(sample_reads)
+summary(asv_prevalence)
+table(cut(asv_prevalence, breaks = c(0, 1, 2, 5, 10, 50, 100, Inf)))
+```
+Choose what we use as the filter: 
+
+```{r}
+# --- change this threshold ---
+min_prevalence <- 2
+
+otu_mat_filt <- otu_mat[, asv_prevalence >= min_prevalence]
+```
+
+The output matrix is filtered, where rownames are the sample name, and each column is the number of reads for each ASV (svecies).
+
 ### DCNF metadata
 
 ```{r}
@@ -134,6 +158,63 @@ dcnf_meta |>
   distinct(pond, latitute, longitude) |>
   filter(!is.na(pond) & pond != "NA") |>
   mutate(coords = paste(latitute, longitude, sep = ", ")) |>
-  mutate |>
+  mutate(area = 0)
   
 ```
+
+
+# Match samples
+
+I want to filter the OTU matrix to the samples from the DCNF only, 
+
+```{r}
+# all sample names in the OTU matrix
+otu_samples <- rownames(otu_mat_filt)
+
+# DCNF sample names from metadata
+dcnf_samples <- dcnf_meta |>
+  filter(!is.na(pond) & pond != "NA") |>
+  pull(sample_name)
+
+# check overlap
+sum(otu_samples %in% dcnf_samples)
+```
+this is too low, so we must have an error, or maybe capitalization issues. 
+
+```{r}
+intersect(
+  rownames(otu_mat),
+  dcnf_meta$sample_name)
+```
+
+Sample names in the OTU matrix have been stripped of hyphens and special characters during processing (e.g. RC18-1A became RC181A), so a direct match fails. We normalize both sets of names before matching.
+
+```{r}
+# normalize: remove hyphens, uppercase
+otu_samples_clean  <- toupper(gsub("-", "", otu_samples))
+dcnf_samples_clean <- toupper(gsub("-", "", dcnf_samples))
+
+cat("Matching samples:", sum(otu_samples_clean %in% dcnf_samples_clean), "\n")
+
+# subset OTU matrix to DCNF samples
+dcnf_otu_raw <- otu_mat[otu_samples_clean %in% dcnf_samples_clean, ]
+dim(dcnf_otu_raw)
+```
+
+Great! now we have the 95 samples from DCNF and need to check and filter out singletons, etc. 
+
+```{r}
+dcnf_prev <- colSums(dcnf_otu_raw > 0)
+
+table(cut(dcnf_prev, breaks = c(-1, 0, 1, 2, 5, 10, 50, Inf)))
+```
+
+
+Of the 23,051 ASVs in the full dataset, 17,201 are completely absent in DCNF and were detected only at the Brazil or Central Texas sites. A further 3,442 appear in only a single DCNF sample and are indistinguishable from sequencing noise. We apply a minimum prevalence threshold of 2, retaining 2,408 ASVs for downstream analysis.
+
+```{r}
+dcnf_otu_filt <- dcnf_otu_raw[, dcnf_prev >= 2]
+dim(dcnf_otu_filt)
+```
+
+
