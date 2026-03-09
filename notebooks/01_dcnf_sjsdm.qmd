@@ -1,0 +1,139 @@
+---
+title: "01 - DCNF sjSDM"
+subtitle: "Tadpole gut microbiome: Joint Species Distribution Model — East Texas (DCNF)"
+author: "Javi Rudolph"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    code-fold: true
+    code-summary: "Show code"
+    theme: flatly
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+## Overview
+
+This notebook focuses on the **David Crockett and Angelina National Forests (DCNF / East Texas)**
+site, which has the richest sampling in the dataset: 9 ponds, 6 tadpole species, and the most
+complete set of environmental covariates (dissolved oxygen, pH, conductivity, chlorophyll-a,
+water temperature, and fish presence/absence).
+
+The goal is to fit a **Joint Species Distribution Model (sjSDM)** to the tadpole gut microbiome
+at DCNF, using pond-level environmental variables as predictors and latent factors to capture
+residual co-occurrence structure among ASVs after accounting for measured environment.
+
+---
+
+## Setup
+
+```{r}
+#| label: libraries
+
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(sjSDM)
+```
+
+---
+
+## Load raw data
+
+### OTU table
+
+The full table has 243 samples × 23,051 ASVs across all three sites (Brazil, Central Texas,
+DCNF). We load it, convert to a matrix immediately, and drop the tibble to save memory.
+
+```{r}
+#| label: load-otu
+
+otu_raw <- read_csv("../data/raw/otu_table.csv")
+
+otu_mat <- otu_raw |>
+  column_to_rownames("SampleName") |>
+  as.matrix()
+
+rm(otu_raw)
+gc()
+
+```
+
+### DCNF metadata
+
+```{r}
+#| label: load-dcnf
+
+dcnf_meta <- read_xlsx("../data/raw/DCNF_metadata.xlsx") |>
+  clean_names() |>
+  mutate(across(c(latitute, longitude, watertemp, conductivity,
+                  chlorophyll, do, p_h, gosner_stage), as.numeric))
+
+glimpse(dcnf_meta)
+```
+
+Explore some of this data and get basic counts
+
+```{r}
+dcnf_meta |> count(type_of_sample, family) |>arrange(desc(n))
+
+dcnf_meta |> count(pond, genus, species) |>arrange(desc(n))
+
+dcnf_meta |>
+  filter(!is.na(gosner_stage)) |>
+  summarise(min = min(gosner_stage), max = max(gosner_stage),
+            mean = round(mean(gosner_stage), 1), .by = species)
+```
+
+Check some environmental variables: 
+```{r}
+ # 87-1 is excluded from the analysis presented in the Correa paper
+dcnf_meta |>
+  distinct(pond, watertemp, conductivity, chlorophyll, do, p_h, type) |>
+  filter(!is.na(pond) & pond != "NA") |>
+  arrange(pond)
+```
+
+```{r}
+dcnf_meta |>
+  distinct(pond, watertemp, conductivity, chlorophyll, do, p_h) |>
+  filter(!is.na(pond) & pond != "NA") |>
+  pivot_longer(-pond, names_to = "variable", values_to = "value") |>
+  ggplot(aes(x = pond, y = value)) +
+  geom_col(fill = "#3d6b8c") +
+  facet_wrap(~variable, scales = "free_y") +
+  labs(title = "Environmental variables by pond — DCNF",
+       x = "Pond", y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Visual check on locations
+```{r}
+dcnf_meta |>
+  distinct(pond, latitute, longitude, type) |>
+  filter(!is.na(pond) & pond != "NA") |>
+  ggplot(aes(x = longitude, y = latitute, color = type, label = pond)) +
+  geom_point(size = 4) +
+  ggrepel::geom_text_repel(size = 3, color = "black") +
+  labs(title = "DCNF pond locations",
+       x = "Longitude", y = "Latitude", color = "Fish type") +
+  theme_minimal() +
+  coord_fixed()
+```
+
+
+We want to extract the area for these ponds, so isolate the coordinates, and manually add the surface area for each of the ponds from drawing the polygons on google earth. 
+```{r}
+dcnf_meta |>
+  distinct(pond, latitute, longitude) |>
+  filter(!is.na(pond) & pond != "NA") |>
+  mutate(coords = paste(latitute, longitude, sep = ", ")) |>
+  mutate |>
+  
+```

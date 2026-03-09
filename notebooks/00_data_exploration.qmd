@@ -248,6 +248,39 @@ dcnf_meta |>
   count(toupper(sample_name) %in% toupper(sample_meta$SampleName))
 ```
 
+Froggies only:
+```{r}
+dcnf_meta %>% filter(family %in% c("Ranidae", "Hylidae", "Microhylidae"))
+
+# family being an environmental variable
+
+# salmanders are:  Sirenidae, Ambystomatidae, and Salamandridae
+
+# DCNF try with filtered singletons, 2... 
+
+# 9 ponds
+# we are trying to get the same analysis from figure 1 using JSDM
+# don't lump froggie or not in the jsdm
+
+dcnf_meta %>% 
+  filter(family %in% c("Ranidae", "Sirenidae", "Ambystomatidae",
+                       "Microhylidae", "Hylidae", "Salamandridae"
+                       #, "WATER", "SUBSTRATE"
+                       )) %>% 
+  mutate(frog_or_not = ifelse(family %in% c("Ranidae", "Microhylidae", "Hylidae"),
+                              "froggie", "not")) %>% 
+  count(frog_or_not, pond) %>% 
+  # count(family, pond) %>% 
+  arrange(n)
+
+dcnf_meta$pond %>% unique()
+dcnf_meta %>% filter(pond == "87-1") #excluded from the paper
+
+dcnf_meta %>% count(pond)
+```
+
+
+
 
 ---
 
