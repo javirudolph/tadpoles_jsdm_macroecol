@@ -1,0 +1,69 @@
+---
+title: "03/24"
+format: html
+---
+
+# Loading Data
+
+```{r}
+library(here)
+library(tidyverse)
+
+otu_raw <- read.csv(here("data", "raw","otu_table.csv"))
+tax_raw <- read.csv(here("data", "raw", "tax_table.csv"))
+dcnf <- read.csv(here("data", "raw", "DCNF_metadata.csv"))
+samples <- read.csv(here("data", "raw", "sample_data.csv"))
+```
+
+# Looking at Data
+
+```{r}
+Phylum <- arrange(count(tax_raw, Phylum), desc(n))
+```
+
+## Looking at RCSFA-4C in DCNF
+
+```{r}
+RCSFA4C <- filter(otu_raw, SampleName == "RCSFA4C")
+
+RCSFA4C_sv_list <- RCSFA4C |> 
+  pivot_longer(
+    cols = -SampleName,        # exclude the sample name column
+    names_to = "SV",
+    values_to = "reads"
+  ) |> 
+  arrange(desc(reads))
+```
+
+```{r}
+RCSFA4C_sv_list_tax <- RCSFA4C_sv_list |> 
+  left_join(tax_raw, by = "SV")
+
+RCSFA4C_sv_list_tax <- filter(RCSFA4C_sv_list_tax, reads > 0)
+
+```
+
+### Graph of the top 10?
+
+```{r}
+# Relative Abundance
+RCSFA4C_sv_list_tax <- RCSFA4C_sv_list_tax |> 
+  mutate(rel_abundance = reads / sum(reads) * 100)
+
+RCSFA4C_sv_list_tax <- RCSFA4C_sv_list_tax |> 
+  relocate(rel_abundance, .after = reads)
+
+# Take the top 10
+top10 <- RCSFA4C_sv_list_tax |> 
+  slice_head(n = 10)
+
+# Plot
+ggplot(top10, aes(x = reorder(SV, -rel_abundance), y = rel_abundance, fill = Order)) +
+  geom_col() +
+  labs(
+    title = "Top 10 Most Abundant SVs",
+    x = "SV",
+    y = "Relative Abundance (%)"
+  ) +
+  theme_classic()
+```
