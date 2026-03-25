@@ -1,3 +1,5 @@
+#Testing, Making sure I'm not editing the main branch
+
 # simulation-study-template
 
 A reproducible project template for simulation-heavy research in ecological disease dynamics. Built to support computational literacy and good research practices from day one.
