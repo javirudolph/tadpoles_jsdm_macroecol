@@ -84,6 +84,7 @@ Choose what we use as the filter:
 min_prevalence <- 2
 
 otu_mat_filt <- otu_mat[, asv_prevalence >= min_prevalence]
+dim(otu_mat_filt)
 ```
 
 The output matrix is filtered, where rownames are the sample name, and each column is the number of reads for each ASV (svecies).
@@ -104,7 +105,7 @@ glimpse(dcnf_meta)
 Explore some of this data and get basic counts
 
 ```{r}
-dcnf_meta |> count(type_of_sample, family) |>arrange(desc(n))
+dcnf_meta |> count(type_of_sample, family) |> arrange(desc(n))
 
 dcnf_meta |> count(pond, genus, species) |>arrange(desc(n))
 
@@ -117,6 +118,7 @@ dcnf_meta |>
 Check some environmental variables: 
 ```{r}
  # 87-1 is excluded from the analysis presented in the Correa paper
+# Mathew says it was because the sirens were collected using traps instead of nets
 dcnf_meta |>
   distinct(pond, watertemp, conductivity, chlorophyll, do, p_h, type) |>
   filter(!is.na(pond) & pond != "NA") |>
@@ -268,6 +270,7 @@ dcnf_df |> count(is_tadpole, is_salamander, is_env, family)
 ```{r}
 # Y matrix presence/absence only
 Y <- (dcnf_otu_filt > 0) * 1L
+dim(Y)
 
 # check alignment that rows match rows (sample names)
 all(toupper(gsub("-", "", rownames(dcnf_otu_filt))) == 
@@ -283,6 +286,9 @@ X <- dcnf_df |>
   select(chlorophyll, conductivity, p_h) |>
   mutate(across(everything(), scale)) |>
   as.matrix()
+
+# make dummy variables here for gosner/fishinfo/tadpolespecies
+# MEMs for the spatial component from lat/lon
 
 model_pa <- sjSDM(
   Y        = Y,
@@ -302,26 +308,6 @@ This to me says, we need to think about functional groups and how do we classify
 # 1. residual co-occurrence
 image(getCor(model_pa))
 ```
-
-Thinking I really want to try the abundance model instead. 
-
-```{r}
-Y_counts <- dcnf_otu_filt
-
-model_ab <- sjSDM(
-  Y        = Y_counts,
-  env      = linear(data = X, formula = ~chlorophyll + conductivity + p_h),
-  biotic   = bioticStruct(df = 2L),
-  family   = poisson("log"),
-  sampling = 100L,
-  se       = FALSE,
-  device   = "cpu",
-  iter     = 100L
-)
-
-image(getCor(model_ab))
-```
-
 
 
 ```{r}
@@ -372,7 +358,7 @@ library(pheatmap)
 
 # annotation for rows/cols
 annot <- tax_top50 |>
-  select(SV, Phylum) |>
+  select(SV, Order) |>
   column_to_rownames("SV")
 
 pheatmap(cor_ordered,
@@ -386,7 +372,56 @@ pheatmap(cor_ordered,
 ```
 
 
-This was cool, I want it for all of them then.
+
+
+
+```{r}
+# 3. variation partitioning
+an <- anova(model_pa, samples = 1000L)
+summary(an)
+plot(an)
+
+results <- internalStructure(an)
+plot(results)
+
+```
+
+
+# Abundance model
+
+Thinking I really want to try the abundance model instead. 
+
+```{r}
+Y_counts <- dcnf_otu_filt
+
+model_ab <- sjSDM(
+  Y        = Y_counts,
+  env      = linear(data = X, formula = ~chlorophyll + conductivity + p_h),
+  biotic   = bioticStruct(df = 2L),
+  family   = poisson("log"),
+  sampling = 100L,
+  se       = FALSE,
+  device   = "cpu",
+  iter     = 100L
+)
+
+image(getCor(model_ab))
+```
+
+```{r}
+
+tax_full <- tax_raw |>
+  arrange(Phylum, Class, Order, Family, Genus)
+
+# reorder correlation matrix by phylogenetic order
+ordered_asvs_full <- tax_full$SV
+cor_ordered_full  <- cor_mat[ordered_asvs_full, ordered_asvs_full]
+
+# annotation for rows/cols
+annot_full <- tax_full |>
+  select(SV, Order) |>
+  column_to_rownames("SV")
+```
 
 ```{r}
 png("../outputs/cooccurrence_full.png", width = 2000, height = 2000, res = 150)
@@ -400,21 +435,3 @@ pheatmap(cor_ordered_full,
          main           = "Residual co-occurrence — all 2408 ASVs ordered by taxonomy")
 dev.off()
 ```
-
-
-
-```{r}
-# 3. variation partitioning
-an <- anova(model_pa, verbose = FALSE)
-summary(an)
-plot(an)
-
-results <- internalStructure(an)
-plot(results)
-
-```
-
-
-
-
-
